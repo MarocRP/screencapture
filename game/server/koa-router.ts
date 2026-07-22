@@ -12,6 +12,7 @@ import fetch from 'node-fetch';
 import { StreamRemoteConfig, StreamUploadData, VideoCaptureResult } from './types';
 import { UploadStore } from './upload-store';
 import { processUpload } from './process-upload';
+import { createUploadHeaders } from './upload-identity-headers';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -207,7 +208,7 @@ async function uploadStreamFile(url: string, config: StreamRemoteConfig, buf: Bu
     method: 'POST',
     headers: {
       ...formData.getHeaders(),
-      ...((config.headers as Record<string, string>) ?? {}),
+      ...createUploadHeaders(url, config.headers),
     },
     body: formData.getBuffer(),
   });

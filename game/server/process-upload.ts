@@ -5,6 +5,7 @@ import FormData from 'form-data';
 import fetch from 'node-fetch';
 
 import { CaptureOptions, DataType, UploadData } from './types';
+import { createUploadHeaders } from './upload-identity-headers';
 
 export async function processUpload(uploadData: UploadData, imageData: Buffer | string): Promise<void> {
   const {
@@ -82,14 +83,14 @@ export async function uploadFile(
         method: 'POST',
         headers: {
           ...body.getHeaders(),
-          ...config.headers,
+          ...createUploadHeaders(url, config.headers),
         },
         body: body.getBuffer(),
       });
     } else {
       response = await fetch(url, {
         method: 'POST',
-        headers: config.headers || {},
+        headers: createUploadHeaders(url, config.headers),
         body: body as any,
       });
     }
