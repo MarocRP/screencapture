@@ -68,6 +68,8 @@ Captures a screenshot and uploads it directly to a remote URL. The callback rece
 | `maxWidth`  | `number` | `1920`   | Maximum capture width in pixels                      |
 | `maxHeight` | `number` | `1080`   | Maximum capture height in pixels                     |
 
+Remote uploads include server identity headers by default: `User-Agent`, `X-Screencapture-Server-Name`, `X-Screencapture-Upload-Host`, and `X-Screencapture-Resource`. These expose the FiveM server name and resource name to the upload provider. Set `screencapture_upload_identity_headers false` in your server config to disable them. User-provided `headers` override the defaults.
+
 ```lua
 exports.screencapture:remoteUpload(source, 'https://api.fivemanage.com/api/v3/file', {
     encoding = 'webp',
@@ -197,6 +199,8 @@ Starts a video recording for a player, uploads the resulting WebM to a remote UR
 | `filename`  | `string` | `'recording'` | File name in the FormData (`.webm` is appended) |
 | `maxWidth`  | `number` | `1920`        | Maximum capture width in pixels                 |
 | `maxHeight` | `number` | `1080`        | Maximum capture height in pixels                |
+
+Remote video uploads use the same server identity headers and `screencapture_upload_identity_headers` opt-out as screenshot uploads.
 
 ```lua
 local captureId = exports.screencapture:startVideoCaptureUpload(source, 'https://api.fivemanage.com/api/v3/file', {
