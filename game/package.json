@@ -35,7 +35,8 @@
     "colorette": "^2.0.20",
     "esbuild": "^0.24.0",
     "rcon": "^1.1.0",
-    "tsup": "^8.3.0"
+    "tsup": "^8.3.0",
+    "typescript": "^5.5.3"
   },
   "keywords": [],
   "author": "",

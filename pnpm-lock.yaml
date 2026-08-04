@@ -95,7 +95,10 @@ importers:
         version: 1.1.0
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(postcss@8.4.47)(typescript@7.0.2)
+        version: 8.3.0(postcss@8.4.47)(typescript@5.6.2)
+      typescript:
+        specifier: ^5.5.3
+        version: 5.6.2
 
   game/nui:
     dependencies:
@@ -123,7 +126,10 @@ importers:
         version: link:../typescript-config
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(postcss@8.4.47)(typescript@7.0.2)
+        version: 8.3.0(postcss@8.4.47)(typescript@5.6.2)
+      typescript:
+        specifier: ^5.5.3
+        version: 5.6.2
 
   packages/react:
     devDependencies:
@@ -135,7 +141,10 @@ importers:
         version: link:../typescript-config
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(postcss@8.4.47)(typescript@7.0.2)
+        version: 8.3.0(postcss@8.4.47)(typescript@5.6.2)
+      typescript:
+        specifier: ^5.5.3
+        version: 5.6.2
 
   packages/typescript-config: {}
 
@@ -4904,7 +4913,7 @@ snapshots:
 
   tsscmp@1.0.6: {}
 
-  tsup@8.3.0(postcss@8.4.47)(typescript@7.0.2):
+  tsup@8.3.0(postcss@8.4.47)(typescript@5.6.2):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.23.1)
       cac: 6.7.14
@@ -4924,7 +4933,7 @@ snapshots:
       tree-kill: 1.2.2
     optionalDependencies:
       postcss: 8.4.47
-      typescript: 7.0.2
+      typescript: 5.6.2
     transitivePeerDependencies:
       - jiti
       - supports-color
