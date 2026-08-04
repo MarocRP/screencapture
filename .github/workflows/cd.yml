@@ -68,11 +68,16 @@ jobs:
             exit 0
           fi
 
-          pnpm exec sentry-cli releases new "$SENTRY_RELEASE" || true
-          pnpm exec sentry-cli sourcemaps inject ./game/dist ./game/nui/dist
+          test -f ./game/dist/server.js.map
+          test -n "$(find ./game/nui/dist -name '*.map' -print -quit)"
+
+          SENTRY_PROJECT="$SENTRY_SERVER_PROJECT" pnpm exec sentry-cli releases new "$SENTRY_RELEASE" || true
+          SENTRY_PROJECT="$SENTRY_NUI_PROJECT" pnpm exec sentry-cli releases new "$SENTRY_RELEASE" || true
+          pnpm exec sentry-cli sourcemaps inject ./game/dist/server.js ./game/dist/server.js.map ./game/nui/dist
           SENTRY_PROJECT="$SENTRY_SERVER_PROJECT" pnpm exec sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" ./game/dist/server.js ./game/dist/server.js.map
           SENTRY_PROJECT="$SENTRY_NUI_PROJECT" pnpm exec sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" ./game/nui/dist
-          pnpm exec sentry-cli releases finalize "$SENTRY_RELEASE"
+          SENTRY_PROJECT="$SENTRY_SERVER_PROJECT" pnpm exec sentry-cli releases finalize "$SENTRY_RELEASE"
+          SENTRY_PROJECT="$SENTRY_NUI_PROJECT" pnpm exec sentry-cli releases finalize "$SENTRY_RELEASE"
 
       - name: Bump manifest version
         run: node .github/actions/bump-manifest-version.js
