@@ -5,6 +5,8 @@ import FormData from 'form-data';
 import fetch from 'node-fetch';
 
 import { CaptureOptions, DataType, UploadData } from './types';
+import { captureUploadException } from './sentry';
+import { captureUploadMetric, getUploadMetricHttpStatus } from './metrics';
 import { createUploadHeaders } from './upload-identity-headers';
 
 export async function processUpload(uploadData: UploadData, imageData: Buffer | string): Promise<void> {
@@ -40,7 +42,10 @@ export async function processUpload(uploadData: UploadData, imageData: Buffer | 
   }
 
   if (isRemote) {
-    const response = await uploadFile(url, remoteConfig, processed, dataType);
+    const response = await uploadFile(url, remoteConfig, processed, dataType, {
+      playerSource,
+      correlationId,
+    });
 
     if (screenshotBasicCompatibility) {
       (callback as any)(false, response);
@@ -70,12 +75,28 @@ export async function uploadFile(
   config: CaptureOptions | null,
   buf: string | Buffer,
   dataType: DataType,
+  context: Pick<UploadData, 'playerSource' | 'correlationId'> = {},
 ) {
   if (!url) throw new Error('No remote URL provided');
   if (!config) throw new Error('No remote config provided');
 
+  const startedAt = Date.now();
+  const bytes = getPayloadBytes(buf);
+
   try {
     const body = await createRequestBody(buf, dataType, config);
+
+    const headers = createUploadHeaders(url, config.headers);
+    console.log('[screencapture] Uploading file to remote URL:', url, 'with headers:', headers);
+    captureUploadMetric({
+      event: 'upload_started',
+      kind: 'image',
+      status: 'started',
+      uploadUrl: url,
+      bytes,
+      dataType,
+      source: context.playerSource,
+    });
 
     let response;
     if (body instanceof FormData) {
@@ -97,17 +118,55 @@ export async function uploadFile(
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Failed to upload file to ${url}. Status: ${response.status}. Response: ${text}`);
+      const error = new Error(`Failed to upload file to ${url}. Status: ${response.status}. Response: ${text}`);
+      (error as Error & { httpStatus?: number }).httpStatus = response.status;
+      throw error;
     }
 
     const res = await response.json();
+    captureUploadMetric({
+      event: 'upload_finished',
+      kind: 'image',
+      status: 'success',
+      uploadUrl: url,
+      httpStatus: response.status,
+      bytes,
+      durationMs: Date.now() - startedAt,
+      dataType,
+      source: context.playerSource,
+    });
     return res;
   } catch (err) {
+    captureUploadException(err, {
+      kind: 'image',
+      uploadUrl: url,
+      dataType,
+      source: context.playerSource,
+      correlationId: context.correlationId,
+      bytes: getPayloadBytes(buf),
+      stage: 'upload',
+    });
+    captureUploadMetric({
+      event: 'upload_failed',
+      kind: 'image',
+      status: 'failed',
+      uploadUrl: url,
+      httpStatus: getUploadMetricHttpStatus(err),
+      bytes,
+      durationMs: Date.now() - startedAt,
+      dataType,
+      source: context.playerSource,
+    });
+
     console.error('Error uploading file:', err);
     if (err instanceof Error) {
       throw new Error(err.message);
     }
   }
+}
+
+function getPayloadBytes(buf: string | Buffer): number {
+  return typeof buf === 'string' ? Buffer.byteLength(buf) : buf.length;
 }
 
 export async function buffer(

@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
 
 jobs:
   create-release:
@@ -38,15 +38,41 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 21.x
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
+
+      - name: Set Sentry release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          export SENTRY_RELEASE="screencapture@$VERSION"
+          node -e "const fs = require('fs'); const file = 'game/sentry-config.ts'; const release = process.env.SENTRY_RELEASE; const content = fs.readFileSync(file, 'utf8'); const next = content.replace(/^export const SENTRY_RELEASE = .*;$/m, \"export const SENTRY_RELEASE = '\" + release + \"';\"); if (next === content) throw new Error('Could not update SENTRY_RELEASE in game/sentry-config.ts'); fs.writeFileSync(file, next);"
+          echo "SENTRY_RELEASE=$SENTRY_RELEASE" >> "$GITHUB_ENV"
 
       - name: Run build
         run: pnpm build
         env:
           CI: false
+          SENTRY_SOURCEMAPS: true
+
+      - name: Upload Sentry source maps
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_SERVER_PROJECT: ${{ secrets.SENTRY_SERVER_PROJECT }}
+          SENTRY_NUI_PROJECT: ${{ secrets.SENTRY_NUI_PROJECT }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_SERVER_PROJECT" ] || [ -z "$SENTRY_NUI_PROJECT" ]; then
+            echo "Skipping Sentry source map upload; SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_SERVER_PROJECT, or SENTRY_NUI_PROJECT is not configured."
+            exit 0
+          fi
+
+          pnpm exec sentry-cli releases new "$SENTRY_RELEASE" || true
+          pnpm exec sentry-cli sourcemaps inject ./game/dist ./game/nui/dist
+          SENTRY_PROJECT="$SENTRY_SERVER_PROJECT" pnpm exec sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" ./game/dist/server.js ./game/dist/server.js.map
+          SENTRY_PROJECT="$SENTRY_NUI_PROJECT" pnpm exec sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" ./game/nui/dist
+          pnpm exec sentry-cli releases finalize "$SENTRY_RELEASE"
 
       - name: Bump manifest version
         run: node .github/actions/bump-manifest-version.js
@@ -59,7 +85,7 @@ jobs:
           add: fxmanifest.lua
           push: true
           author_name: Manifest Bumper
-          message: "chore: bump manifest version to ${{ github.ref_name }}"
+          message: 'chore: bump manifest version to ${{ github.ref_name }}'
 
       - name: Update tag ref
         uses: EndBug/latest-tag@latest
@@ -74,14 +100,15 @@ jobs:
           cp ./{README.md,LICENSE,fxmanifest.lua} ./temp/screencapture
           cp -r ./game/dist ./temp/screencapture/game/dist
           cp -r ./game/nui/dist ./temp/screencapture/game/nui/dist
+          find ./temp/screencapture -name "*.map" -delete
           cd ./temp && zip -r ../screencapture.zip ./screencapture
 
       - name: Create Release
-        uses: "marvinpinto/action-automatic-releases@v1.2.1"
+        uses: 'marvinpinto/action-automatic-releases@v1.2.1'
         id: auto_release
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          title: "${{ env.RELEASE_VERSION }}"
+          repo_token: '${{ secrets.GITHUB_TOKEN }}'
+          title: '${{ env.RELEASE_VERSION }}'
           prerelease: false
           files: screencapture.zip
 

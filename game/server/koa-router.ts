@@ -12,6 +12,8 @@ import fetch from 'node-fetch';
 import { StreamRemoteConfig, StreamUploadData, VideoCaptureResult } from './types';
 import { UploadStore } from './upload-store';
 import { processUpload } from './process-upload';
+import { captureUploadException } from './sentry';
+import { captureUploadMetric, getUploadMetricHttpStatus } from './metrics';
 import { createUploadHeaders } from './upload-identity-headers';
 
 const upload = multer({
@@ -133,7 +135,7 @@ export async function finalizeStream(streamData: StreamUploadData): Promise<void
 
     let response: unknown;
     try {
-      response = await uploadStreamFile(streamData.remoteUrl!, streamData.remoteConfig!, videoBuffer!);
+      response = await uploadStreamFile(streamData, videoBuffer!);
     } catch (err) {
       if (!streamData.legacyCallback) {
         streamData.callback(createVideoCaptureErrorResult(streamData, err, elapsedSeconds));
@@ -194,7 +196,13 @@ function createVideoCaptureResult(
   };
 }
 
-async function uploadStreamFile(url: string, config: StreamRemoteConfig, buf: Buffer): Promise<unknown> {
+async function uploadStreamFile(streamData: StreamUploadData, buf: Buffer): Promise<unknown> {
+  const url = streamData.remoteUrl;
+  const config = streamData.remoteConfig;
+
+  if (!url) throw new Error('No remote video upload URL provided');
+  if (!config) throw new Error('No remote video upload config provided');
+
   const formData = new FormData();
   const filename = config.filename ? `${config.filename}.webm` : 'recording.webm';
 
@@ -204,19 +212,72 @@ async function uploadStreamFile(url: string, config: StreamRemoteConfig, buf: Bu
     knownLength: buf.length,
   });
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      ...formData.getHeaders(),
-      ...createUploadHeaders(url, config.headers),
-    },
-    body: formData.getBuffer(),
+  const headers = createUploadHeaders(url, config.headers);
+  console.log('[screencapture] Uploading stream to remote URL:', url, 'with headers:', headers);
+
+  const startedAt = Date.now();
+  captureUploadMetric({
+    event: 'upload_started',
+    kind: 'video',
+    status: 'started',
+    uploadUrl: url,
+    bytes: buf.length,
+    captureId: streamData.captureId,
+    source: streamData.source,
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Video upload failed: ${response.status} — ${text}`);
-  }
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...formData.getHeaders(),
+        ...createUploadHeaders(url, config.headers),
+      },
+      body: formData.getBuffer(),
+    });
 
-  return response.json();
+    if (!response.ok) {
+      const text = await response.text();
+      const error = new Error(`Video upload failed: ${response.status} — ${text}`);
+      (error as Error & { httpStatus?: number }).httpStatus = response.status;
+      throw error;
+    }
+
+    const result = await response.json();
+    captureUploadMetric({
+      event: 'upload_finished',
+      kind: 'video',
+      status: 'success',
+      uploadUrl: url,
+      httpStatus: response.status,
+      bytes: buf.length,
+      durationMs: Date.now() - startedAt,
+      captureId: streamData.captureId,
+      source: streamData.source,
+    });
+
+    return result;
+  } catch (err) {
+    captureUploadException(err, {
+      kind: 'video',
+      uploadUrl: url,
+      captureId: streamData.captureId,
+      source: streamData.source,
+      bytes: buf.length,
+      stage: 'upload',
+    });
+    captureUploadMetric({
+      event: 'upload_failed',
+      kind: 'video',
+      status: 'failed',
+      uploadUrl: url,
+      httpStatus: getUploadMetricHttpStatus(err),
+      bytes: buf.length,
+      durationMs: Date.now() - startedAt,
+      captureId: streamData.captureId,
+      source: streamData.source,
+    });
+
+    throw err;
+  }
 }

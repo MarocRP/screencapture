@@ -45,7 +45,6 @@ onNet('screencapture:INTERNAL_uploadComplete', (response: unknown, correlationId
   }
 });
 
-
 async function requestScreenshotUpload(
   url: string,
   formField: string,

@@ -5,6 +5,7 @@ const nodePaths = require("./node-paths");
 const isWatchEnabled = process.argv.findIndex((arg) => arg === '--watch') !== -1;
 
 const shouldRestart = process.argv.findIndex((arg) => arg === '--restart') !== -1;
+const shouldBuildSourcemaps = process.env.SENTRY_SOURCEMAPS === 'true';
 
 const buildConfig = {
   server: {
@@ -26,6 +27,7 @@ async function build() {
       entryPoints: [`${targetProject}/bootstrap.ts`],
       outfile: `dist/${targetProject}.js`,
       minify: targetProject === 'client',
+      sourcemap: shouldBuildSourcemaps,
       plugins: [nodePaths],
       ...projectConfig,
     });

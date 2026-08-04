@@ -52,7 +52,7 @@ export function registerImageHandlers() {
     try {
       const rawBuffer = base64ToBuffer(base64Data);
 
-      const response = await uploadFile(url, remoteConfig, rawBuffer, 'blob');
+      const response = await uploadFile(url, remoteConfig, rawBuffer, 'blob', uploadData);
 
       if (screenshotBasicCompatibility) {
         (callback as any)(false, response);

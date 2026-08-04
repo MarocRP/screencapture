@@ -7,12 +7,16 @@
     "build:gameview": "pnpm --filter @screencapture/gameview build",
     "build:game": "pnpm --filter @screencapture/game build",
     "build:nui": "pnpm --filter @screencapture/nui build",
+    "build:metrics": "pnpm --filter @screencapture/metrics-worker build",
+    "dev:metrics": "pnpm --filter @screencapture/metrics-worker dev",
+    "deploy:metrics": "pnpm --filter @screencapture/metrics-worker deploy",
     "build": "pnpm turbo build"
   },
   "keywords": [],
   "author": "itschip",
   "license": "MIT",
   "devDependencies": {
+    "@sentry/cli": "^2.42.2",
     "prettier": "^3.3.3",
     "turbo": "^2.1.2",
     "typescript": "^5.5.3"
