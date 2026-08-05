@@ -1,16 +1,20 @@
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 
-import { uploadStore } from './bootstrap';
+import { liveStreamStore, uploadStore } from './bootstrap';
 import {
   CallbackFn,
   CaptureOptions,
   DataType,
+  LiveStreamCallback,
+  LiveStreamOptions,
+  LiveStreamViewerGrant,
   ScreenshotBasicCallbackFn,
   StreamRemoteConfig,
   createScreenshotBasicUploadData,
   createRegularUploadData,
 } from './types';
+import { endLiveStream, getLiveStreamClient, provisionLiveStream } from './live';
 import { exportHandler } from './utils';
 import { nanoid } from 'nanoid';
 
@@ -43,8 +47,105 @@ function validateStreamRequest(source: number, options: CaptureOptions, exportNa
     return false;
   }
 
+  if (liveStreamStore.hasActiveStreamForSource(source)) {
+    console.error(`[screencapture] source ${source} already has an active live stream`);
+    return false;
+  }
+
   return true;
 }
+
+function normalizeLiveStreamOptions(options: LiveStreamOptions = {}): Required<LiveStreamOptions> | undefined {
+  const normalized = {
+    maxWidth: options.maxWidth ?? 1280,
+    maxHeight: options.maxHeight ?? 720,
+    frameRate: options.frameRate ?? 30,
+    duration: options.duration ?? 1800,
+    maxViewers: options.maxViewers ?? 25,
+  };
+
+  const values = Object.values(normalized);
+  if (values.some((value) => !Number.isFinite(value) || !Number.isInteger(value) || value < 1)) return;
+
+  return {
+    maxWidth: Math.min(normalized.maxWidth, 1280),
+    maxHeight: Math.min(normalized.maxHeight, 720),
+    frameRate: Math.min(normalized.frameRate, 30),
+    duration: Math.min(normalized.duration, 1800),
+    maxViewers: Math.min(normalized.maxViewers, 25),
+  };
+}
+
+function startLiveStream(
+  source: number,
+  options: LiveStreamOptions = {},
+  callback: LiveStreamCallback = () => {},
+): string {
+  const streamId = nanoid(24);
+  const realCallback = typeof callback === 'function' ? callback : () => {};
+
+  const fail = (error: string): string => {
+    console.error(`[screencapture] cannot start live stream: ${error}`);
+    realCallback({ streamId, source, status: 'error', error });
+    return streamId;
+  };
+
+  if (!source) {
+    return fail('source is required for startLiveStream');
+  }
+
+  const normalizedOptions = normalizeLiveStreamOptions(options);
+  if (!normalizedOptions) {
+    return fail('live stream options must be positive integers');
+  }
+
+  if (uploadStore.hasActiveStreamForSource(source) || liveStreamStore.hasActiveStreamForSource(source)) {
+    return fail(`source ${source} already has an active video capture`);
+  }
+
+  try {
+    getLiveStreamClient();
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+
+  try {
+    liveStreamStore.addPending(streamId, source, realCallback);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+
+  void provisionLiveStream(streamId, source, normalizedOptions);
+  return streamId;
+}
+
+global.exports('startLiveStream', startLiveStream);
+
+global.exports(
+  'createLiveStreamViewerToken',
+  (streamId: string, callback: (result: LiveStreamViewerGrant | { error: string }) => void) => {
+    if (!streamId || typeof callback !== 'function') return;
+
+    void (async () => {
+      try {
+        const entry = liveStreamStore.get(streamId);
+        if (entry.state !== 'live' || !entry.ownerToken) {
+          throw new Error('Live stream is not ready for viewers');
+        }
+        callback(await getLiveStreamClient().createViewerToken(streamId, entry.ownerToken));
+      } catch (error) {
+        callback({ error: error instanceof Error ? error.message : 'Could not create viewer token' });
+      }
+    })();
+  },
+);
+
+global.exports('stopLiveStream', (streamId: string, callback?: (stopped: boolean) => void) => {
+  if (!streamId) return callback?.(false);
+  void endLiveStream(streamId, 'manual').then((stopped) => callback?.(stopped));
+});
+
+global.exports('isLiveStreamActive', (streamId: string) => Boolean(streamId && liveStreamStore.has(streamId)));
 
 function startVideoCapture(
   source: number,
