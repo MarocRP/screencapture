@@ -32,3 +32,23 @@ export interface ScreenshotCreatedBody {
   id: string;
   data: string;
 }
+
+export type LiveStreamClientRequest = {
+  endpoint: string;
+  streamId: string;
+  publisherToken: string;
+  expiresAt: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  frameRate?: number;
+};
+
+export type LiveStreamStatus = {
+  streamId: string;
+  state: 'connecting' | 'live' | 'reconnecting' | 'failed' | 'stopped';
+  audioAvailable: boolean;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  error?: string;
+};

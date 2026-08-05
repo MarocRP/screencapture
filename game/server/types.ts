@@ -122,3 +122,75 @@ export type RequestUploadToken = {
   correlationId: string;
   filename: string;
 };
+
+export type LiveStreamState = 'provisioning' | 'connecting' | 'live' | 'reconnecting' | 'failed' | 'stopped';
+
+export type LiveStreamOptions = {
+  maxWidth?: number;
+  maxHeight?: number;
+  frameRate?: number;
+  duration?: number;
+  maxViewers?: number;
+};
+
+export type LiveStreamStatus = {
+  streamId: string;
+  state: Exclude<LiveStreamState, 'provisioning'>;
+  audioAvailable: boolean;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  error?: string;
+};
+
+export type LiveStreamReadyResult = {
+  streamId: string;
+  source: number;
+  status: 'ready';
+  expiresAt: number;
+  audioAvailable: boolean;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+};
+
+export type LiveStreamErrorResult = {
+  streamId: string;
+  source: number;
+  status: 'error';
+  error: string;
+};
+
+export type LiveStreamResult = LiveStreamReadyResult | LiveStreamErrorResult;
+export type LiveStreamCallback = (result: LiveStreamResult) => void;
+
+export type LiveStreamEntry = {
+  streamId: string;
+  source: number;
+  state: LiveStreamState;
+  callback: LiveStreamCallback;
+  callbackResolved: boolean;
+  audioAvailable: boolean;
+  createdAt: number;
+  ownerToken?: string;
+  publisherToken?: string;
+  expiresAt?: number;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  error?: string;
+  expiryTimeout?: ReturnType<typeof setTimeout>;
+};
+
+export type ProvisionedLiveStream = {
+  streamId: string;
+  ownerToken: string;
+  publisherToken: string;
+  expiresAt: number;
+};
+
+export type LiveStreamViewerGrant = {
+  streamId: string;
+  viewerToken: string;
+  expiresAt: number;
+};

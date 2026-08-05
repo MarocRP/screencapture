@@ -117,13 +117,22 @@ importers:
         version: 5.6.2
       vite:
         specifier: ^5.4.1
-        version: 5.4.6(@types/node@22.8.6)
+        version: 5.4.6(@types/node@24.13.3)
 
   packages/gameview:
     devDependencies:
       '@screencapture/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      tsup:
+        specifier: ^8.3.0
+        version: 8.3.0(postcss@8.4.47)(typescript@5.6.2)
+      typescript:
+        specifier: ^5.5.3
+        version: 5.6.2
+
+  packages/live:
+    devDependencies:
       tsup:
         specifier: ^8.3.0
         version: 8.3.0(postcss@8.4.47)(typescript@5.6.2)
@@ -147,6 +156,18 @@ importers:
         version: 5.6.2
 
   packages/typescript-config: {}
+
+  workers/live:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      wrangler:
+        specifier: ^4.118.0
+        version: 4.118.0(@cloudflare/workers-types@5.20260804.1)
 
   workers/metrics:
     devDependencies:
@@ -1484,6 +1505,9 @@ packages:
   '@types/node@22.8.6':
     resolution: {integrity: sha512-tosuJYKrIqjQIlVCM4PEGxOmyg3FCPa/fViuJChnGeEIhjA46oy8FMVoF9su1/v8PNs2a8Q0iFNyOx0uOF91nw==}
 
+  '@types/node@24.13.3':
+    resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+
   '@types/pg-pool@2.0.6':
     resolution: {integrity: sha512-TaAUE5rq2VQYxab5Ts7WZhKNmuN78Q6PiFonTDdpbx8a1H0M1vhy3rhiMjl+e2iHmogyMw7jZF4FrE6eJUy5HQ==}
 
@@ -2612,6 +2636,9 @@ packages:
 
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
+
+  undici-types@7.18.2:
+    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
   undici@7.28.0:
     resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
@@ -3819,6 +3846,10 @@ snapshots:
     dependencies:
       undici-types: 6.19.8
 
+  '@types/node@24.13.3':
+    dependencies:
+      undici-types: 7.18.2
+
   '@types/pg-pool@2.0.6':
     dependencies:
       '@types/pg': 8.6.1
@@ -5001,6 +5032,8 @@ snapshots:
 
   undici-types@6.19.8: {}
 
+  undici-types@7.18.2: {}
+
   undici@7.28.0: {}
 
   unenv@2.0.0-rc.24:
@@ -5013,13 +5046,13 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite@5.4.6(@types/node@22.8.6):
+  vite@5.4.6(@types/node@24.13.3):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.4.47
       rollup: 4.22.0
     optionalDependencies:
-      '@types/node': 22.8.6
+      '@types/node': 24.13.3
       fsevents: 2.3.3
 
   web-streams-polyfill@3.3.3: {}

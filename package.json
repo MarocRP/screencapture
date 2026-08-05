@@ -10,6 +10,12 @@
     "build:metrics": "pnpm --filter @screencapture/metrics-worker build",
     "dev:metrics": "pnpm --filter @screencapture/metrics-worker dev",
     "deploy:metrics": "pnpm --filter @screencapture/metrics-worker deploy",
+    "types:live-worker": "pnpm --filter @screencapture/live-worker types",
+    "typecheck:live-worker": "pnpm --filter @screencapture/live-worker typecheck",
+    "build:live-worker": "pnpm --filter @screencapture/live-worker build",
+    "dev:live-worker": "pnpm --filter @screencapture/live-worker dev",
+    "deploy:live-worker": "pnpm --filter @screencapture/live-worker deploy",
+    "build:live-sdk": "pnpm --filter @screencapture/live build",
     "build": "pnpm turbo build"
   },
   "keywords": [],

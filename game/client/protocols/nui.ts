@@ -1,5 +1,5 @@
 import { clientCaptureMap, clientUploadTokenMap } from "../bootstrap";
-import { ScreenshotCreatedBody } from "../types";
+import { LiveStreamStatus, ScreenshotCreatedBody } from "../types";
 import { uniqueId } from "../event";
 
 const imagesBps = parseInt(GetResourceMetadata(GetCurrentResourceName(), 'images_bps', 0), 10) || 500000;
@@ -98,4 +98,9 @@ on('__cfx_nui:capture_stream_finalize', async (body: any, cb: (arg: any) => void
   }
 
   cb({ ok: false, error: 'Missing stream token' });
+});
+
+on('__cfx_nui:live_stream_status', (body: LiveStreamStatus, cb: (arg: unknown) => void) => {
+  cb({ ok: true });
+  emitNet('screencapture:liveStream:status', body);
 });

@@ -1,6 +1,6 @@
 import { request } from 'http';
 import { netEventController } from './event';
-import { CaptureRequest, RequestScreenshotUploadCB } from './types';
+import { CaptureRequest, LiveStreamClientRequest, RequestScreenshotUploadCB } from './types';
 import { exportHandler, uuidv4 } from './utils';
 
 import './protocols/nui';
@@ -13,6 +13,7 @@ RegisterNuiCallbackType('screenshot_upload_proxy');
 RegisterNuiCallbackType('capture_screen');
 RegisterNuiCallbackType('capture_stream_chunk');
 RegisterNuiCallbackType('capture_stream_finalize');
+RegisterNuiCallbackType('live_stream_status');
 
 const protocol = GetResourceMetadata(GetCurrentResourceName(), 'protocol', 0) || 'http';
 const serverEndpoint = `http://${GetCurrentServerEndpoint()}/${GetCurrentResourceName()}`;
@@ -160,5 +161,20 @@ onNet('screencapture:INTERNAL:stopCaptureStream', (captureId?: string) => {
   SendNUIMessage({
     action: 'capture-stream-stop',
     captureId,
+  });
+});
+
+onNet('screencapture:liveStream:start', (request: LiveStreamClientRequest) => {
+  SendNUIMessage({
+    ...request,
+    action: 'live-stream-start',
+    statusCallbackUrl: `https://${GetCurrentResourceName()}/live_stream_status`,
+  });
+});
+
+onNet('screencapture:liveStream:stop', (streamId?: string) => {
+  SendNUIMessage({
+    action: 'live-stream-stop',
+    streamId,
   });
 });
