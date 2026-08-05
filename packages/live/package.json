@@ -13,6 +13,9 @@
     }
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup index.ts --format esm,cjs --minify --dts",
     "typecheck": "tsc --noEmit"

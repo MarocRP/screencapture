@@ -2,6 +2,7 @@ name: Release
 
 permissions:
   contents: write
+  id-token: write
 
 on:
   push:
@@ -39,6 +40,8 @@ jobs:
         with:
           node-version: 24.19.0
           cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@screencapture'
 
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
@@ -49,6 +52,19 @@ jobs:
           export SENTRY_RELEASE="screencapture@$VERSION"
           node -e "const fs = require('fs'); const file = 'game/sentry-config.ts'; const release = process.env.SENTRY_RELEASE; const content = fs.readFileSync(file, 'utf8'); const next = content.replace(/^export const SENTRY_RELEASE = .*;$/m, \"export const SENTRY_RELEASE = '\" + release + \"';\"); if (next === content) throw new Error('Could not update SENTRY_RELEASE in game/sentry-config.ts'); fs.writeFileSync(file, next);"
           echo "SENTRY_RELEASE=$SENTRY_RELEASE" >> "$GITHUB_ENV"
+
+      - name: Set npm package versions
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$VERSION" node <<'NODE'
+          const fs = require('fs');
+
+          for (const file of ['packages/gameview/package.json', 'packages/live/package.json']) {
+            const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+            pkg.version = process.env.PACKAGE_VERSION;
+            fs.writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
+          }
+          NODE
 
       - name: Run build
         run: pnpm build
@@ -78,6 +94,18 @@ jobs:
           SENTRY_PROJECT="$SENTRY_NUI_PROJECT" pnpm exec sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" ./game/nui/dist
           SENTRY_PROJECT="$SENTRY_SERVER_PROJECT" pnpm exec sentry-cli releases finalize "$SENTRY_RELEASE"
           SENTRY_PROJECT="$SENTRY_NUI_PROJECT" pnpm exec sentry-cli releases finalize "$SENTRY_RELEASE"
+
+      - name: Publish npm packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret is required to publish npm packages."
+            exit 1
+          fi
+
+          pnpm --filter @screencapture/gameview publish --access public --provenance --no-git-checks
+          pnpm --filter @screencapture/live publish --access public --provenance --no-git-checks
 
       - name: Bump manifest version
         run: node .github/actions/bump-manifest-version.js
