@@ -11,7 +11,6 @@ type IncomingTelemetryEvent = {
   status?: unknown;
   runtime?: unknown;
   uploadHost?: unknown;
-  uploadPath?: unknown;
   httpStatus?: unknown;
   bytes?: unknown;
   durationMs?: unknown;
@@ -29,7 +28,6 @@ type SanitizedTelemetryEvent = {
   status?: string;
   runtime?: string;
   uploadHost?: string;
-  uploadPath?: string;
   httpStatus?: number;
   bytes?: number;
   durationMs?: number;
@@ -90,20 +88,6 @@ function sanitizeHost(value: unknown): string | undefined {
   }
 }
 
-function sanitizePath(value: unknown): string | undefined {
-  const raw = text(value, 500);
-  if (!raw) return undefined;
-
-  try {
-    const parsed = new URL(raw);
-    return parsed.pathname.slice(0, 300);
-  } catch {
-    const path = raw.split('?')[0];
-    if (!path || !path.startsWith('/')) return undefined;
-    return path.slice(0, 300);
-  }
-}
-
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -132,7 +116,6 @@ function sanitizeEvent(input: IncomingTelemetryEvent, request: Request): Sanitiz
     status: text(input.status, 40),
     runtime: text(input.runtime, 40),
     uploadHost: sanitizeHost(input.uploadHost),
-    uploadPath: sanitizePath(input.uploadPath),
     httpStatus: number(input.httpStatus),
     bytes: number(input.bytes),
     durationMs: number(input.durationMs),

@@ -19,12 +19,27 @@ function isUploadIdentityHeadersEnabled(): boolean {
   return !DISABLED_VALUES.has(value);
 }
 
-function getUploadHost(url: string): string | undefined {
+export function getUploadHost(url: string): string | undefined {
   try {
     return new URL(url).hostname;
   } catch {
     return undefined;
   }
+}
+
+export function formatUploadErrorMessage(kind: 'image' | 'video', url: string, err: unknown): string {
+  const host = getUploadHost(url) ?? 'unknown host';
+  const httpStatus =
+    err && typeof err === 'object' && typeof (err as { httpStatus?: unknown }).httpStatus === 'number'
+      ? (err as { httpStatus: number }).httpStatus
+      : undefined;
+  if (httpStatus) return `${kind} upload failed to ${host} with HTTP ${httpStatus}`;
+
+  const code =
+    err && typeof err === 'object' && typeof (err as { code?: unknown }).code === 'string'
+      ? (err as { code: string }).code
+      : undefined;
+  return `${kind} upload failed to ${host}${code ? ` (${code})` : ''}`;
 }
 
 function getServerName(): string | undefined {

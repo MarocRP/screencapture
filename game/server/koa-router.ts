@@ -12,9 +12,8 @@ import fetch from 'node-fetch';
 import { StreamRemoteConfig, StreamUploadData, VideoCaptureResult } from './types';
 import { UploadStore } from './upload-store';
 import { processUpload } from './process-upload';
-import { captureUploadException } from './sentry';
 import { captureUploadMetric, getUploadMetricHttpStatus } from './metrics';
-import { createUploadHeaders } from './upload-identity-headers';
+import { createUploadHeaders, formatUploadErrorMessage, getUploadHost } from './upload-identity-headers';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -213,7 +212,7 @@ async function uploadStreamFile(streamData: StreamUploadData, buf: Buffer): Prom
   });
 
   const headers = createUploadHeaders(url, config.headers);
-  console.log('[screencapture] Uploading stream to remote URL:', url, 'with headers:', headers);
+  console.log('[screencapture] Uploading stream to remote host:', getUploadHost(url) ?? 'unknown');
 
   const startedAt = Date.now();
   captureUploadMetric({
@@ -231,14 +230,13 @@ async function uploadStreamFile(streamData: StreamUploadData, buf: Buffer): Prom
       method: 'POST',
       headers: {
         ...formData.getHeaders(),
-        ...createUploadHeaders(url, config.headers),
+        ...headers,
       },
       body: formData.getBuffer(),
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      const error = new Error(`Video upload failed: ${response.status} — ${text}`);
+      const error = new Error(`Video upload failed with HTTP ${response.status}`);
       (error as Error & { httpStatus?: number }).httpStatus = response.status;
       throw error;
     }
@@ -258,14 +256,6 @@ async function uploadStreamFile(streamData: StreamUploadData, buf: Buffer): Prom
 
     return result;
   } catch (err) {
-    captureUploadException(err, {
-      kind: 'video',
-      uploadUrl: url,
-      captureId: streamData.captureId,
-      source: streamData.source,
-      bytes: buf.length,
-      stage: 'upload',
-    });
     captureUploadMetric({
       event: 'upload_failed',
       kind: 'video',
@@ -278,6 +268,6 @@ async function uploadStreamFile(streamData: StreamUploadData, buf: Buffer): Prom
       source: streamData.source,
     });
 
-    throw err;
+    throw new Error(formatUploadErrorMessage('video', url, err));
   }
 }

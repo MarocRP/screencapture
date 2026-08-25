@@ -1,6 +1,7 @@
 import { liveStreamStore } from './bootstrap';
 import { LiveStreamClient } from './live-client';
 import { LiveStreamOptions, LiveStreamStatus } from './types';
+import { emitNetToPlayer } from './net';
 
 type LiveStreamEndReason = 'manual' | 'duration' | 'player-dropped' | 'publisher-failed' | 'publisher-stopped' | 'resource-stop';
 
@@ -47,7 +48,7 @@ export async function provisionLiveStream(
       void endLiveStream(streamId, 'duration');
     }, Math.max(0, grant.expiresAt - Date.now())));
 
-    emitNet('screencapture:liveStream:start', source, {
+    emitNetToPlayer('screencapture:liveStream:start', source, {
       endpoint: client.endpoint,
       streamId,
       publisherToken: grant.publisherToken,
@@ -73,7 +74,7 @@ export async function endLiveStream(streamId: string, reason: LiveStreamEndReaso
   }
   liveStreamStore.remove(streamId);
 
-  emitNet('screencapture:liveStream:stop', entry.source, streamId);
+  emitNetToPlayer('screencapture:liveStream:stop', entry.source, streamId);
 
   if (entry.ownerToken) {
     try {

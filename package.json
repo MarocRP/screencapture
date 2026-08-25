@@ -27,7 +27,6 @@
   "author": "itschip",
   "license": "MIT",
   "devDependencies": {
-    "@sentry/cli": "^2.42.2",
     "prettier": "^3.3.3",
     "turbo": "^2.1.2",
     "typescript": "^5.5.3"

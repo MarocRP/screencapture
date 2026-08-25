@@ -17,7 +17,9 @@ import {
 import { endLiveStream, getLiveStreamClient, provisionLiveStream } from './live';
 import { exportHandler } from './utils';
 import { nanoid } from 'nanoid';
+import { emitNetToPlayer, validatePlayerSource } from './net';
 
+type PlayerSource = number | string;
 
 const tempDir = path.join(GetResourcePath(GetCurrentResourceName()), 'tmp');
 mkdir(tempDir, { recursive: true }).catch((err) => {
@@ -31,28 +33,26 @@ function normalizeStreamOptions(options: CaptureOptions = {}, duration?: number)
   };
 }
 
-function validateStreamRequest(source: number, options: CaptureOptions, exportName: string): boolean {
-  if (!source) {
-    console.error(`[screencapture] source is required for ${exportName}`);
-    return false;
-  }
+function validateStreamRequest(source: PlayerSource, options: CaptureOptions, exportName: string): number | undefined {
+  const playerSource = validatePlayerSource(source, exportName);
+  if (!playerSource) return;
 
   if (options.duration !== undefined && (!Number.isFinite(options.duration) || options.duration <= 0)) {
     console.error(`[screencapture] duration must be a positive number for ${exportName}`);
-    return false;
+    return;
   }
 
-  if (uploadStore.hasActiveStreamForSource(source)) {
-    console.error(`[screencapture] source ${source} already has an active video capture`);
-    return false;
+  if (uploadStore.hasActiveStreamForSource(playerSource)) {
+    console.error(`[screencapture] source ${playerSource} already has an active video capture`);
+    return;
   }
 
-  if (liveStreamStore.hasActiveStreamForSource(source)) {
-    console.error(`[screencapture] source ${source} already has an active live stream`);
-    return false;
+  if (liveStreamStore.hasActiveStreamForSource(playerSource)) {
+    console.error(`[screencapture] source ${playerSource} already has an active live stream`);
+    return;
   }
 
-  return true;
+  return playerSource;
 }
 
 function normalizeLiveStreamOptions(options: LiveStreamOptions = {}): Required<LiveStreamOptions> | undefined {
@@ -77,7 +77,7 @@ function normalizeLiveStreamOptions(options: LiveStreamOptions = {}): Required<L
 }
 
 function startLiveStream(
-  source: number,
+  source: PlayerSource,
   options: LiveStreamOptions = {},
   callback: LiveStreamCallback = () => {},
 ): string {
@@ -86,11 +86,12 @@ function startLiveStream(
 
   const fail = (error: string): string => {
     console.error(`[screencapture] cannot start live stream: ${error}`);
-    realCallback({ streamId, source, status: 'error', error });
+    realCallback({ streamId, source: playerSource ?? 0, status: 'error', error });
     return streamId;
   };
 
-  if (!source) {
+  const playerSource = validatePlayerSource(source, 'startLiveStream');
+  if (!playerSource) {
     return fail('source is required for startLiveStream');
   }
 
@@ -99,8 +100,8 @@ function startLiveStream(
     return fail('live stream options must be positive integers');
   }
 
-  if (uploadStore.hasActiveStreamForSource(source) || liveStreamStore.hasActiveStreamForSource(source)) {
-    return fail(`source ${source} already has an active video capture`);
+  if (uploadStore.hasActiveStreamForSource(playerSource) || liveStreamStore.hasActiveStreamForSource(playerSource)) {
+    return fail(`source ${playerSource} already has an active video capture`);
   }
 
   try {
@@ -110,12 +111,12 @@ function startLiveStream(
   }
 
   try {
-    liveStreamStore.addPending(streamId, source, realCallback);
+    liveStreamStore.addPending(streamId, playerSource, realCallback);
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error));
   }
 
-  void provisionLiveStream(streamId, source, normalizedOptions);
+  void provisionLiveStream(streamId, playerSource, normalizedOptions);
   return streamId;
 }
 
@@ -148,32 +149,37 @@ global.exports('stopLiveStream', (streamId: string, callback?: (stopped: boolean
 global.exports('isLiveStreamActive', (streamId: string) => Boolean(streamId && liveStreamStore.has(streamId)));
 
 function startVideoCapture(
-  source: number,
+  source: PlayerSource,
   options: CaptureOptions = {},
   callback: CallbackFn = () => {},
   legacyCallback = false,
 ): string | undefined {
-  if (!validateStreamRequest(source, options, legacyCallback ? 'serverCaptureStream' : 'startVideoCapture')) return;
+  const playerSource = validateStreamRequest(
+    source,
+    options,
+    legacyCallback ? 'serverCaptureStream' : 'startVideoCapture',
+  );
+  if (!playerSource) return;
 
   const captureId = nanoid(24);
-  console.log(`[screencapture] Starting video capture for source ${source} with capture ID ${captureId}`);
+  console.log(`[screencapture] Starting video capture for source ${playerSource} with capture ID ${captureId}`);
 
   const token = uploadStore.addStream({
     captureId,
-    source,
+    source: playerSource,
     tempDir,
     callback,
     duration: options.duration,
     legacyCallback,
   });
 
-  emitNet('screencapture:captureStream', source, token, options, captureId);
+  emitNetToPlayer('screencapture:captureStream', playerSource, token, options, captureId);
 
   return captureId;
 }
 
 function startVideoCaptureUpload(
-  source: number,
+  source: PlayerSource,
   url: string,
   options: StreamRemoteConfig & Pick<CaptureOptions, 'maxWidth' | 'maxHeight' | 'duration'> = {},
   callback: CallbackFn = () => {},
@@ -184,14 +190,19 @@ function startVideoCaptureUpload(
     return;
   }
 
-  if (!validateStreamRequest(source, options, legacyCallback ? 'remoteUploadStream' : 'startVideoCaptureUpload')) return;
+  const playerSource = validateStreamRequest(
+    source,
+    options,
+    legacyCallback ? 'remoteUploadStream' : 'startVideoCaptureUpload',
+  );
+  if (!playerSource) return;
 
   const captureId = nanoid(24);
-  console.log(`[screencapture] Starting remote video capture for source ${source} with capture ID ${captureId}`);
+  console.log(`[screencapture] Starting remote video capture for source ${playerSource} with capture ID ${captureId}`);
 
   const token = uploadStore.addStream({
     captureId,
-    source,
+    source: playerSource,
     tempDir,
     callback,
     duration: options.duration,
@@ -205,14 +216,14 @@ function startVideoCaptureUpload(
     legacyCallback,
   });
 
-  emitNet('screencapture:captureStream', source, token, options, captureId);
+  emitNetToPlayer('screencapture:captureStream', playerSource, token, options, captureId);
 
   return captureId;
 }
 
 global.exports('startVideoCapture', startVideoCapture);
 global.exports('startVideoCaptureUpload', startVideoCaptureUpload);
-global.exports('serverCaptureStream', (source: number, options: CaptureOptions, callback: CallbackFn, duration?: number) => {
+global.exports('serverCaptureStream', (source: PlayerSource, options: CaptureOptions, callback: CallbackFn, duration?: number) => {
   return startVideoCapture(source, normalizeStreamOptions(options ?? {}, duration), callback ?? (() => {}), true);
 });
 
@@ -220,7 +231,7 @@ global.exports('serverCaptureStream', (source: number, options: CaptureOptions, 
 global.exports(
   'remoteUploadStream',
   (
-    source: number,
+    source: PlayerSource,
     url: string,
     options: StreamRemoteConfig & Pick<CaptureOptions, 'maxWidth' | 'maxHeight'>,
     callback: CallbackFn,
@@ -235,7 +246,7 @@ global.exports('stopVideoCapture', (captureId: string) => {
 
   try {
     const streamData = uploadStore.getStreamByCaptureId(captureId);
-    emitNet('screencapture:INTERNAL:stopCaptureStream', streamData.source, captureId);
+    emitNetToPlayer('screencapture:INTERNAL:stopCaptureStream', streamData.source, captureId);
   } catch (err) {
     console.error('[screencapture] stopVideoCapture failed:', err);
   }
@@ -252,20 +263,31 @@ global.exports('isVideoCaptureActive', (captureId: string) => {
   }
 });
 
-global.exports('INTERNAL_stopServerCaptureStream', (source: number) => {
-  const captureId = uploadStore.getCaptureIdBySource(source);
-  emitNet('screencapture:INTERNAL:stopCaptureStream', source, captureId);
+global.exports('INTERNAL_stopServerCaptureStream', (source: PlayerSource) => {
+  const playerSource = validatePlayerSource(source, 'stop server capture stream');
+  if (!playerSource) return;
+
+  const captureId = uploadStore.getCaptureIdBySource(playerSource);
+  if (!captureId) return console.error(`[screencapture] source ${playerSource} has no active video capture`);
+
+  emitNetToPlayer('screencapture:INTERNAL:stopCaptureStream', playerSource, captureId);
 });
 
-global.exports('stopStream', (source: number) => {  
-  const captureId = uploadStore.getCaptureIdBySource(source);
-  emitNet('screencapture:INTERNAL:stopCaptureStream', source, captureId); 
+global.exports('stopStream', (source: PlayerSource) => {
+  const playerSource = validatePlayerSource(source, 'stop stream');
+  if (!playerSource) return;
+
+  const captureId = uploadStore.getCaptureIdBySource(playerSource);
+  if (!captureId) return console.error(`[screencapture] source ${playerSource} has no active video capture`);
+
+  emitNetToPlayer('screencapture:INTERNAL:stopCaptureStream', playerSource, captureId);
 });
 
 global.exports(
   'remoteUpload',
-  (source: number, url: string, options: CaptureOptions, callback: CallbackFn, dataType: DataType = 'base64') => {
-    if (!source) return console.error('source is required for serverCapture');
+  (source: PlayerSource, url: string, options: CaptureOptions, callback: CallbackFn, dataType: DataType = 'base64') => {
+    const playerSource = validatePlayerSource(source, 'remoteUpload');
+    if (!playerSource) return;
 
     const token = uploadStore.addUpload(
       createRegularUploadData({
@@ -280,14 +302,15 @@ global.exports(
       }),
     );
 
-    emitNet('screencapture:captureScreen', source, token, options, dataType);
+    emitNetToPlayer('screencapture:captureScreen', playerSource, token, options, dataType);
   },
 );
 
 global.exports(
   'serverCapture',
-  (source: number, options: CaptureOptions, callback: CallbackFn, dataType: DataType = 'base64') => {
-    if (!source) return console.error('source is required for serverCapture');
+  (source: PlayerSource, options: CaptureOptions, callback: CallbackFn, dataType: DataType = 'base64') => {
+    const playerSource = validatePlayerSource(source, 'serverCapture');
+    if (!playerSource) return;
 
     const opts = {
       ...options,
@@ -303,13 +326,14 @@ global.exports(
       }),
     );
 
-    emitNet('screencapture:captureScreen', source, token, opts, dataType);
+    emitNetToPlayer('screencapture:captureScreen', playerSource, token, opts, dataType);
   },
 );
 
 // screenshot-basic backwards compatibility
-function requestClientScreenshot(source: number, options: CaptureOptions, callback: ScreenshotBasicCallbackFn) {
-  if (!source) return console.error('source is required for requestClientScreenshot');
+function requestClientScreenshot(source: PlayerSource, options: CaptureOptions, callback: ScreenshotBasicCallbackFn) {
+  const playerSource = validatePlayerSource(source, 'requestClientScreenshot');
+  if (!playerSource) return;
 
   const opts = {
     ...options,
@@ -327,18 +351,18 @@ function requestClientScreenshot(source: number, options: CaptureOptions, callba
     }),
   );
 
-  emitNet('screencapture:captureScreen', source, token, opts, isBlob ? 'blob' : 'base64');
+  emitNetToPlayer('screencapture:captureScreen', playerSource, token, opts, isBlob ? 'blob' : 'base64');
 }
 
 global.exports(
   'requestClientScreenshot',
-  (source: number, options: CaptureOptions, callback: ScreenshotBasicCallbackFn) => {
+  (source: PlayerSource, options: CaptureOptions, callback: ScreenshotBasicCallbackFn) => {
     requestClientScreenshot(source, options, callback);
   },
 );
 exportHandler(
   'requestClientScreenshot',
-  (source: number, options: CaptureOptions, callback: ScreenshotBasicCallbackFn) => {
+  (source: PlayerSource, options: CaptureOptions, callback: ScreenshotBasicCallbackFn) => {
     requestClientScreenshot(source, options, callback);
   },
 );

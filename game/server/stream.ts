@@ -3,6 +3,7 @@ import { base64ToBuffer } from './process-upload';
 import { appendFile } from 'node:fs/promises';
 import { finalizeStream } from './koa-router';
 import { getEventContext } from './context';
+import { emitNetToPlayer } from './net';
 
 type StreamAck = {
   ok: boolean;
@@ -11,7 +12,7 @@ type StreamAck = {
 
 function sendAck(responseEvent: string | undefined, source: number, response: StreamAck): void {
   if (responseEvent) {
-    emitNet(responseEvent, source, response);
+    emitNetToPlayer(responseEvent, source, response);
   }
 }
 

@@ -5,9 +5,8 @@ import FormData from 'form-data';
 import fetch from 'node-fetch';
 
 import { CaptureOptions, DataType, UploadData } from './types';
-import { captureUploadException } from './sentry';
 import { captureUploadMetric, getUploadMetricHttpStatus } from './metrics';
-import { createUploadHeaders } from './upload-identity-headers';
+import { createUploadHeaders, formatUploadErrorMessage, getUploadHost } from './upload-identity-headers';
 
 export async function processUpload(uploadData: UploadData, imageData: Buffer | string): Promise<void> {
   const {
@@ -23,7 +22,6 @@ export async function processUpload(uploadData: UploadData, imageData: Buffer | 
 
   const encoding = remoteConfig?.encoding || 'webp';
 
-  // short-circuit and avoid a needless decode → re-encode round-trip.
   let processed: string | Buffer;
 
   if (dataType === 'base64') {
@@ -87,7 +85,6 @@ export async function uploadFile(
     const body = await createRequestBody(buf, dataType, config);
 
     const headers = createUploadHeaders(url, config.headers);
-    console.log('[screencapture] Uploading file to remote URL:', url, 'with headers:', headers);
     captureUploadMetric({
       event: 'upload_started',
       kind: 'image',
@@ -104,21 +101,23 @@ export async function uploadFile(
         method: 'POST',
         headers: {
           ...body.getHeaders(),
-          ...createUploadHeaders(url, config.headers),
+          ...headers,
         },
         body: body.getBuffer(),
       });
     } else {
       response = await fetch(url, {
         method: 'POST',
-        headers: createUploadHeaders(url, config.headers),
+        headers,
         body: body as any,
       });
     }
 
     if (!response.ok) {
       const text = await response.text();
-      const error = new Error(`Failed to upload file to ${url}. Status: ${response.status}. Response: ${text}`);
+      const error = new Error(
+        `Failed to upload file to ${getUploadHost(url) ?? 'unknown host'}. Status: ${response.status}. Response: ${text}`,
+      );
       (error as Error & { httpStatus?: number }).httpStatus = response.status;
       throw error;
     }
@@ -137,15 +136,7 @@ export async function uploadFile(
     });
     return res;
   } catch (err) {
-    captureUploadException(err, {
-      kind: 'image',
-      uploadUrl: url,
-      dataType,
-      source: context.playerSource,
-      correlationId: context.correlationId,
-      bytes: getPayloadBytes(buf),
-      stage: 'upload',
-    });
+    const uploadErrorMessage = formatUploadErrorMessage('image', url, err);
     captureUploadMetric({
       event: 'upload_failed',
       kind: 'image',
@@ -158,10 +149,8 @@ export async function uploadFile(
       source: context.playerSource,
     });
 
-    console.error('Error uploading file:', err);
-    if (err instanceof Error) {
-      throw new Error(err.message);
-    }
+    console.error(`[screencapture] ${uploadErrorMessage}`);
+    throw new Error(uploadErrorMessage);
   }
 }
 

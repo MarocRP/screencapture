@@ -1,6 +1,12 @@
-import fetch from 'node-fetch';
 import { METRICS_ENABLED, METRICS_ENDPOINT, METRICS_WRITE_KEY } from '../telemetry-config';
-import { SENTRY_RELEASE } from '../sentry-config';
+
+declare function PerformHttpRequest(
+  url: string,
+  callback: (statusCode: number, body: string, headers: Record<string, string>, errorData?: string) => void,
+  method?: string,
+  data?: string,
+  headers?: Record<string, string>,
+): void;
 
 type UploadMetricEvent = {
   event: 'upload_started' | 'upload_finished' | 'upload_failed';
@@ -40,7 +46,6 @@ function getUploadTarget(uploadUrl: string): { host?: string; path?: string } {
     const parsed = new URL(uploadUrl);
     return {
       host: parsed.hostname,
-      path: parsed.pathname,
     };
   } catch {
     return {};
@@ -53,10 +58,23 @@ function getHttpStatus(err: unknown): number | undefined {
   return typeof status === 'number' ? status : undefined;
 }
 
+function getEndpointHost(): string {
+  try {
+    return new URL(METRICS_ENDPOINT).hostname;
+  } catch {
+    return 'metrics endpoint';
+  }
+}
+
+function logMetricsFailure(reason: string): void {
+  console.warn(`[screencapture] metrics upload failed for ${getEndpointHost()}: ${reason}`);
+}
+
 export function captureUploadMetric(metric: UploadMetricEvent): void {
   if (!METRICS_ENABLED || !METRICS_ENDPOINT) return;
 
   const target = getUploadTarget(metric.uploadUrl);
+  const version = getResourceVersion();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -65,27 +83,47 @@ export function captureUploadMetric(metric: UploadMetricEvent): void {
     headers['x-screencapture-key'] = METRICS_WRITE_KEY;
   }
 
-  fetch(METRICS_ENDPOINT, {
+  const body = JSON.stringify({
+    event: metric.event,
+    kind: metric.kind,
+    status: metric.status,
+    runtime: 'server',
+    uploadHost: target.host,
+    httpStatus: metric.httpStatus,
+    bytes: metric.bytes,
+    durationMs: metric.durationMs,
+    dataType: metric.dataType,
+    version,
+    release: `screencapture@${version}`,
+    captureId: metric.captureId,
+    source: metric.source,
+  });
+
+  if (typeof PerformHttpRequest === 'function') {
+    try {
+      PerformHttpRequest(
+        METRICS_ENDPOINT,
+        (statusCode, _responseBody, _responseHeaders, errorData) => {
+          if (statusCode >= 200 && statusCode < 300) return;
+          logMetricsFailure(errorData || `HTTP ${statusCode}`);
+        },
+        'POST',
+        body,
+        headers,
+      );
+    } catch (err) {
+      logMetricsFailure(err instanceof Error ? err.message : String(err));
+    }
+
+    return;
+  }
+
+  globalThis.fetch?.(METRICS_ENDPOINT, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      event: metric.event,
-      kind: metric.kind,
-      status: metric.status,
-      runtime: 'server',
-      uploadHost: target.host,
-      uploadPath: target.path,
-      httpStatus: metric.httpStatus,
-      bytes: metric.bytes,
-      durationMs: metric.durationMs,
-      dataType: metric.dataType,
-      version: getResourceVersion(),
-      release: SENTRY_RELEASE,
-      captureId: metric.captureId,
-      source: metric.source,
-    }),
+    body,
   }).catch((err) => {
-    console.warn('[screencapture] metrics upload failed:', err instanceof Error ? err.message : err);
+    logMetricsFailure(err instanceof Error ? err.message : String(err));
   });
 }
 

@@ -2,6 +2,7 @@ import { eventController } from './event';
 import { RequestUploadToken, createRegularUploadData } from './types';
 import { uploadStore } from './bootstrap';
 import { processUpload, uploadFile, base64ToBuffer } from './process-upload';
+import { emitNetToPlayer } from './net';
 
 export function registerImageHandlers() {
   eventController<RequestUploadToken, string>(
@@ -12,7 +13,12 @@ export function registerImageHandlers() {
         playerSource: number | undefined,
         correlationId: string | undefined,
       ): void {
-        emitNet('screencapture:INTERNAL_uploadComplete', playerSource, JSON.stringify(response), correlationId);
+        emitNetToPlayer(
+          'screencapture:INTERNAL_uploadComplete',
+          playerSource,
+          JSON.stringify(response),
+          correlationId,
+        );
       }
 
       const token = uploadStore.addUpload(createRegularUploadData({

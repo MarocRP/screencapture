@@ -1,4 +1,5 @@
 import { type Context, getEventContext } from './context';
+import { emitNetToPlayer } from './net';
 
 type Event<T = unknown, R = unknown> = {
   body: T;
@@ -14,7 +15,7 @@ export function eventController<TData, TResponse = void>(
     const ctx = getEventContext();
 
     function send(data: TResponse): void {
-      return emitNet(responseEvent, ctx.source, data);
+      emitNetToPlayer(responseEvent, ctx.source, data);
     }
 
     // TODO: Add status codes or something to the response
@@ -23,6 +24,5 @@ export function eventController<TData, TResponse = void>(
       ctx: ctx,
       send,
     });
-    //return emitNet(responseEvent, ctx.source, response);
   });
 }
